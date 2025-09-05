@@ -1,20 +1,198 @@
--- Services
+-- // Services
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
--- Vars
-local AutoKillEnabled = true -- always ON
-local autoSizeLoop
-local serverHopLoop
+-- // Vars
+local AutoKillEnabled = true
 local LockPosition = CFrame.new(-31.8626, 6.0588, 2087.8867)
 
--- Functions
+-- // Whitelist usernames
+local Whitelist = {
+"shhhh_892",
+"JJJoshligas",
+"david2937471",
+"Larry028372"
+}
+
+-- ============================================================
+-- Custom Notification System (Bottom-right, perfect position)
+-- ============================================================
+local activeNotifications = {}
+
+local function Notify(title, content, duration)
+duration = duration or 5
+
+local screenGui = CoreGui:FindFirstChild("CustomNotifyUI") or Instance.new("ScreenGui")
+screenGui.Name = "CustomNotifyUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 80)
+frame.Position = UDim2.new(1, 0, 1, -40) -- start offscreen bottom
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BackgroundTransparency = 0.2
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner", frame)
+uiCorner.CornerRadius = UDim.new(0, 10)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -10, 0, 30)
+titleLabel.Position = UDim2.new(0, 5, 0, 5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = title or "Notification"
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = frame
+
+local contentLabel = Instance.new("TextLabel")
+contentLabel.Size = UDim2.new(1, -10, 0, 40)
+contentLabel.Position = UDim2.new(0, 5, 0, 35)
+contentLabel.BackgroundTransparency = 1
+contentLabel.Text = content or ""
+contentLabel.Font = Enum.Font.SourceSans
+contentLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+contentLabel.TextSize = 16
+contentLabel.TextXAlignment = Enum.TextXAlignment.Left
+contentLabel.TextWrapped = true
+contentLabel.Parent = frame
+
+-- Insert into active list
+table.insert(activeNotifications, frame)
+
+-- Update positions of all notifications
+for i, notif in ipairs(activeNotifications) do
+local goalY = -100 - ((i - 1) * 90) -- closer to bottom, stack upward
+TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+Position = UDim2.new(1, -270, 1, goalY)
+}):Play()
+end
+
+-- Auto remove after duration
+task.spawn(function()
+wait(duration)
+-- Slide out
+local tweenOut = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+Position = UDim2.new(1, 0, 1, -40)
+})
+tweenOut:Play()
+tweenOut.Completed:Wait()
+frame:Destroy()
+
+-- Remove from active list    
+for i, notif in ipairs(activeNotifications) do    
+    if notif == frame then    
+        table.remove(activeNotifications, i)    
+        break    
+    end    
+end    
+
+-- Re-stack remaining notifications    
+for i, notif in ipairs(activeNotifications) do    
+    local goalY = -100 - ((i - 1) * 90)    
+    TweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {    
+        Position = UDim2.new(1, -270, 1, goalY)    
+    }):Play()    
+end
+
+end)
+
+end
+
+-- Startup Notification
+Notify("Script Loaded", "✅ Thank you for using my script by Nolimit", 6)
+
+-- ============================================================
+-- Player Counter + Toggle GUI
+-- ============================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PlayerCounterUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+-- Player Status Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 180, 0, 50)
+frame.Position = UDim2.new(1, -200, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BackgroundTransparency = 0.3
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0.4, 0)
+title.BackgroundTransparency = 1
+title.Text = "Player Status"
+title.Font = Enum.Font.SourceSansBold
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 18
+title.Parent = frame
+
+local playerCountLabel = Instance.new("TextLabel")
+playerCountLabel.Size = UDim2.new(1, 0, 0.6, 0)
+playerCountLabel.Position = UDim2.new(0, 0, 0.4, 0)
+playerCountLabel.BackgroundTransparency = 1
+playerCountLabel.Text = "Players: 0 / 0"
+playerCountLabel.Font = Enum.Font.SourceSans
+playerCountLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+playerCountLabel.TextSize = 20
+playerCountLabel.Parent = frame
+
+-- Toggle frame and button
+local toggleFrame = Instance.new("Frame")
+toggleFrame.Size = UDim2.new(0, 180, 0, 50)
+toggleFrame.Position = UDim2.new(1, -200, 0, 80)
+toggleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleFrame.BackgroundTransparency = 0.3
+toggleFrame.BorderSizePixel = 0
+toggleFrame.Parent = screenGui
+
+local toggleLabel = Instance.new("TextLabel")
+toggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+toggleLabel.Position = UDim2.new(0, 5, 0, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "Functions"
+toggleLabel.Font = Enum.Font.SourceSansBold
+toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleLabel.TextSize = 18
+toggleLabel.Parent = toggleFrame
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0.3, 0, 0.7, 0)
+toggleButton.Position = UDim2.new(0.65, 0, 0.15, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+toggleButton.Text = "ON"
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize = 18
+toggleButton.Parent = toggleFrame
+
+-- Update player count
+local function UpdatePlayerCount()
+local current = #Players:GetPlayers()
+local maxPlayers = Players.MaxPlayers
+playerCountLabel.Text = "Players: " .. current .. " / " .. maxPlayers
+end
+Players.PlayerAdded:Connect(UpdatePlayerCount)
+Players.PlayerRemoving:Connect(UpdatePlayerCount)
+UpdatePlayerCount()
+
+-- ============================================================
+-- Core Functions
+-- ============================================================
 local function EquipPunch()
 local tool = LocalPlayer.Backpack:FindFirstChild("Punch")
-if tool then
+if tool and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
 LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):EquipTool(tool)
 end
 end
@@ -27,103 +205,136 @@ if punch then
 if punch:FindFirstChild("attackTime") then
 punch.attackTime.Value = 0.001
 end
-for i = 1, 5 do pcall(function() punch:Activate() end) end
+for i = 1, 5 do
+pcall(function() punch:Activate() end)
+end
 end
 end
 
-local function AutoKillLoop(lockPosition)
-task.spawn(function()
-while AutoKillEnabled do
+local function DoPunchNoAnim()
+local char = LocalPlayer.Character
+if not char then return end
+local punchTool = LocalPlayer.Backpack:FindFirstChild("Punch") or char:FindFirstChild("Punch")
+if punchTool then
+if punchTool.Parent ~= char then
+punchTool.Parent = char
+end
+pcall(function()
+if LocalPlayer:FindFirstChild("muscleEvent") then
+LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
+LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+end
+end)
+end
+end
+
+local function HopServer()
+pcall(function()
+local gameId = 3623096087
+local cursor = ""
+repeat
+local url = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&limit=100"..(cursor ~= "" and "&cursor="..cursor or "")
+local response = game:HttpGet(url)
+local data = HttpService:JSONDecode(response)
+for _, server in ipairs(data.data) do
+local playing = server.playing or 0
+if server.id ~= game.JobId and playing >= 15 and playing <= 20 then
+TeleportService:TeleportToPlaceInstance(gameId, server.id, LocalPlayer)
+return
+end
+end
+cursor = data.nextPageCursor or ""
+until cursor == "" or not cursor
+end)
+end
+
+-- Auto Kill Loop
+RunService.Heartbeat:Connect(function()
+if not AutoKillEnabled then return end
 local char = LocalPlayer.Character
 if char and char:FindFirstChild("HumanoidRootPart") then
-if lockPosition then
-char.HumanoidRootPart.CFrame = lockPosition
+if LockPosition then
+pcall(function()
+char.HumanoidRootPart.CFrame = LockPosition
+end)
 end
 EquipPunch()
 DoPunch()
+DoPunchNoAnim()
 local rHand = char:FindFirstChild("RightHand")
 local lHand = char:FindFirstChild("LeftHand")
 if rHand and lHand then
 for _, target in ipairs(Players:GetPlayers()) do
 if target ~= LocalPlayer and target.Character then
--- ✅ Skip friends
-if not pcall(function()
+local ok, isFriend = pcall(function()
 return LocalPlayer:IsFriendsWith(target.UserId)
-end) or not LocalPlayer:IsFriendsWith(target.UserId) then
+end)
+if not ok or not isFriend then
 local root = target.Character:FindFirstChild("HumanoidRootPart")
 if root then
+pcall(function()
 firetouchinterest(rHand, root, 1)
 firetouchinterest(lHand, root, 1)
 firetouchinterest(rHand, root, 0)
 firetouchinterest(lHand, root, 0)
-end
-end
-end
-end
-end
-end
-task.wait(0.01)
-end
 end)
 end
+end
+end
+end
+end
+end
+end)
 
-local function StartAutoSizeNaN()
-if autoSizeLoop then return end
-autoSizeLoop = task.spawn(function()
-while AutoKillEnabled do
+-- Auto Size NaN
+RunService.Heartbeat:Connect(function()
+if AutoKillEnabled then
 pcall(function()
+if ReplicatedStorage:FindFirstChild("rEvents") and ReplicatedStorage.rEvents:FindFirstChild("changeSpeedSizeRemote") then
 ReplicatedStorage.rEvents.changeSpeedSizeRemote:InvokeServer("changeSize", 0/0)
-end)
-task.wait()
 end
 end)
 end
+end)
 
-local function StopAutoSizeNaN()
-if autoSizeLoop then
-task.cancel(autoSizeLoop)
-autoSizeLoop = nil
-end
-end
-
--- Server hop loop
-local function StartServerHopLoop()
-if serverHopLoop then return end
-serverHopLoop = task.spawn(function()
-while AutoKillEnabled do
+-- Server Hop loop
+task.spawn(function()
+while true do
 task.wait(60)
-pcall(function()
-local servers = {}
-local cursor = ""
-local gameId = 3623096087
-
-repeat  
-                local response = game:HttpGet(  
-                    "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&limit=100"..(cursor ~= "" and "&cursor="..cursor or "")  
-                )  
-                local data = HttpService:JSONDecode(response)  
-                for _, server in ipairs(data.data) do  
-                    if server.playing >= 15 and server.playing <= 20 and server.id ~= game.JobId then  
-                        TeleportService:TeleportToPlaceInstance(gameId, server.id, LocalPlayer)  
-                        return  
-                    end  
-                end  
-                cursor = data.nextPageCursor or ""  
-            until cursor == "" or not cursor  
-        end)  
-    end  
+if AutoKillEnabled then
+pcall(HopServer)
+end
+end
 end)
 
+-- Whitelist Detection
+Players.PlayerAdded:Connect(function(player)
+if table.find(Whitelist, player.Name) then
+HopServer()
+end
+end)
+for _, player in ipairs(Players:GetPlayers()) do
+if table.find(Whitelist, player.Name) then
+HopServer()
+end
 end
 
-local function StopServerHopLoop()
-if serverHopLoop then
-task.cancel(serverHopLoop)
-serverHopLoop = nil
+-- Toggle Button Logic
+local function UpdateToggleButton()
+if AutoKillEnabled then
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+toggleButton.Text = "ON"
+else
+toggleButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+toggleButton.Text = "OFF"
 end
 end
 
---  Auto start as soon as executed
-AutoKillLoop(LockPosition)
-StartAutoSizeNaN()
-StartServerHopLoop()
+toggleButton.MouseButton1Click:Connect(function()
+AutoKillEnabled = not AutoKillEnabled
+UpdateToggleButton()
+Notify("AutoKill", AutoKillEnabled and "✅ AutoKill Enabled" or "❌ AutoKill Disabled", 4)
+end)
+
+UpdateToggleButton()
+
